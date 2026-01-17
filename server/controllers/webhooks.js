@@ -128,47 +128,6 @@ export const stripeWebhooks = async (request, response) => {
         //     }
         //     break;
         // }
-        // case 'payment_intent.succeeded': {
-        //     const paymentIntent = event.data.object;
-
-        //     try {
-        //         // 1. You MUST await this call
-        //         const sessions = await stripeInstance.checkout.sessions.list({
-        //             payment_intent: paymentIntent.id,
-        //         });
-
-        //         if (sessions.data.length === 0) {
-        //             console.error("No session found for this payment intent");
-        //             break;
-        //         }
-
-        //         const { purchaseId } = sessions.data[0].metadata;
-
-        //         // 2. Update the Purchase record
-        //         const purchaseData = await Purchase.findById(purchaseId);
-        //         if (purchaseData) {
-        //             purchaseData.status = 'completed';
-
-        //             // 3. Update User and Course relationships
-        //             const userData = await User.findById(purchaseData.userId);
-        //             const courseData = await Course.findById(purchaseData.courseId);
-
-        //             if (userData && courseData) {
-        //                 courseData.enrolledStudents.push(userData._id);
-        //                 userData.enrolledCourses.push(courseData._id);
-
-        //                 await courseData.save();
-        //                 await userData.save();
-        //             }
-
-        //             await purchaseData.save();
-        //             console.log(`Purchase ${purchaseId} updated to completed.`);
-        //         }
-        //     } catch (err) {
-        //         console.error("Webhook Error:", err.message);
-        //     }
-        //     break;
-        // }
         case 'payment_intent.payment_failed':
             {
                 const paymentIntent = event.data.object;
