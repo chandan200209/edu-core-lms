@@ -65,25 +65,74 @@ export const stripeWebhooks = async (request, response) => {
     }
     // Handle the event
     switch (event.type) {
-        case 'payment_intent.succeeded':
-            {
-                const paymentIntent = event.data.object;
-                const paymentIntentId = paymentIntent.id;
-                const session = await stripeInstance.checkout.sessions.list({
-                    payment_intent: paymentIntentId,
-                })
-                const { purchaseId } = session.data[0].metadata;
+        // case 'payment_intent.succeeded':
+        //     {
+        //         const paymentIntent = event.data.object;
+        //         const paymentIntentId = paymentIntent.id;
+        //         const session = await stripeInstance.checkout.sessions.list({
+        //             payment_intent: paymentIntentId,
+        //         })
+        //         const { purchaseId } = session.data[0].metadata;
+        //         const purchaseData = await Purchase.findById(purchaseId);
+        //         const userData = await User.findById(purchaseData.userId);
+        //         const courseData = await Course.findById(purchaseData.courseId.toString());
+        //         courseData.enrolledStudents.push(userData);
+        //         await courseData.save();
+        //         userData.enrolledCourses.push(courseData._id)
+        //         await userData.save();
+        //         purchaseData.status = 'completed'
+        //         await purchaseData.save();
+        //         break;
+        //     }
+        case 'payment_intent.succeeded': {
+            const paymentIntent = event.data.object;
+
+            try {
+                // 1. You MUST await this network request
+                const sessions = await stripeInstance.checkout.sessions.list({
+                    payment_intent: paymentIntent.id,
+                });
+
+                // 2. Safety check to ensure session and metadata exist
+                if (!sessions.data.length || !sessions.data[0].metadata) {
+                    console.error("No metadata found for this payment intent.");
+                    return res.status(400).send("Metadata missing");
+                }
+
+                const { purchaseId } = sessions.data[0].metadata;
+
+                // 3. Find the purchase record
                 const purchaseData = await Purchase.findById(purchaseId);
+                if (!purchaseData) {
+                    console.error("Purchase not found in database.");
+                    return res.status(404).send("Purchase not found");
+                }
+
+                // 4. Update the DB records
                 const userData = await User.findById(purchaseData.userId);
-                const courseData = await Course.findById(purchaseData.courseId.toString());
-                courseData.enrolledStudents.push(userData);
-                await courseData.save();
-                userData.enrolledCourses.push(courseData._id)
-                await userData.save();
-                purchaseData.status = 'completed'
-                await purchaseData.save();
-                break;
+                const courseData = await Course.findById(purchaseData.courseId);
+
+                if (userData && courseData) {
+                    // Push IDs specifically to avoid Mongoose validation errors
+                    courseData.enrolledStudents.push(userData._id);
+                    userData.enrolledCourses.push(courseData._id);
+
+                    await courseData.save();
+                    await userData.save();
+
+                    purchaseData.status = 'completed';
+                    await purchaseData.save();
+
+                    console.log(`Successfully processed purchase: ${purchaseId}`);
+                }
+
+            } catch (err) {
+                console.error("Webhook Logic Error:", err.message);
+                // Sending 500 here tells Stripe to try again later
+                return res.status(500).send("Internal Server Error");
             }
+            break;
+        }
         // case 'payment_intent.succeeded': {
         //     const paymentIntent = event.data.object;
         //     const paymentIntentId = paymentIntent.id;
