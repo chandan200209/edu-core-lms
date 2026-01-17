@@ -84,47 +84,88 @@ export const stripeWebhooks = async (request, response) => {
         //         await purchaseData.save();
         //         break;
         //     }
+        // case 'payment_intent.succeeded': {
+        //     const paymentIntent = event.data.object;
+        //     const paymentIntentId = paymentIntent.id;
+
+        //     try {
+        //         // 1. MUST await this call to get the actual data
+        //         const sessions = await stripeInstance.checkout.sessions.list({
+        //             payment_intent: paymentIntentId,
+        //         });
+
+        //         // 2. Safety check: Ensure the session exists and has metadata
+        //         if (!sessions.data.length || !sessions.data[0].metadata) {
+        //             console.error("No metadata found for this session.");
+        //             break;
+        //         }
+
+        //         const { purchaseId } = sessions.data[0].metadata;
+
+        //         // 3. Fetch data from DB
+        //         const purchaseData = await Purchase.findById(purchaseId);
+        //         if (!purchaseData) throw new Error("Purchase record not found");
+
+        //         const userData = await User.findById(purchaseData.userId);
+        //         const courseData = await Course.findById(purchaseData.courseId.toString());
+
+        //         // 4. Update arrays (Push the _id, not the full object)
+        //         courseData.enrolledStudents.push(userData._id);
+        //         await courseData.save();
+
+        //         userData.enrolledCourses.push(courseData._id);
+        //         await userData.save();
+
+        //         // 5. Update and save status
+        //         purchaseData.status = 'completed';
+        //         await purchaseData.save();
+
+        //         console.log(`Success: Purchase ${purchaseId} is now completed.`);
+
+        //     } catch (err) {
+        //         // This will show you EXACTLY what is failing in your logs
+        //         console.error("Webhook Logic Error:", err.message);
+        //     }
+        //     break;
+        // }
         case 'payment_intent.succeeded': {
             const paymentIntent = event.data.object;
-            const paymentIntentId = paymentIntent.id;
 
             try {
-                // 1. MUST await this call to get the actual data
+                // 1. You MUST await this call
                 const sessions = await stripeInstance.checkout.sessions.list({
-                    payment_intent: paymentIntentId,
+                    payment_intent: paymentIntent.id,
                 });
 
-                // 2. Safety check: Ensure the session exists and has metadata
-                if (!sessions.data.length || !sessions.data[0].metadata) {
-                    console.error("No metadata found for this session.");
+                if (sessions.data.length === 0) {
+                    console.error("No session found for this payment intent");
                     break;
                 }
 
                 const { purchaseId } = sessions.data[0].metadata;
 
-                // 3. Fetch data from DB
+                // 2. Update the Purchase record
                 const purchaseData = await Purchase.findById(purchaseId);
-                if (!purchaseData) throw new Error("Purchase record not found");
+                if (purchaseData) {
+                    purchaseData.status = 'completed';
 
-                const userData = await User.findById(purchaseData.userId);
-                const courseData = await Course.findById(purchaseData.courseId.toString());
+                    // 3. Update User and Course relationships
+                    const userData = await User.findById(purchaseData.userId);
+                    const courseData = await Course.findById(purchaseData.courseId);
 
-                // 4. Update arrays (Push the _id, not the full object)
-                courseData.enrolledStudents.push(userData._id);
-                await courseData.save();
+                    if (userData && courseData) {
+                        courseData.enrolledStudents.push(userData._id);
+                        userData.enrolledCourses.push(courseData._id);
 
-                userData.enrolledCourses.push(courseData._id);
-                await userData.save();
+                        await courseData.save();
+                        await userData.save();
+                    }
 
-                // 5. Update and save status
-                purchaseData.status = 'completed';
-                await purchaseData.save();
-
-                console.log(`Success: Purchase ${purchaseId} is now completed.`);
-
+                    await purchaseData.save();
+                    console.log(`Purchase ${purchaseId} updated to completed.`);
+                }
             } catch (err) {
-                // This will show you EXACTLY what is failing in your logs
-                console.error("Webhook Logic Error:", err.message);
+                console.error("Webhook Error:", err.message);
             }
             break;
         }
