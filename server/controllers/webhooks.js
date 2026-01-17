@@ -115,12 +115,24 @@ export const stripeWebhooks = async (request, response) => {
                 const userData = await User.findById(purchaseData.userId);
                 const courseData = await Course.findById(purchaseData.courseId);
 
-                if (userData && courseData) {
-                    courseData.enrolledStudents.push(userData._id);
-                    userData.enrolledCourses.push(courseData._id);
-                    await courseData.save();
-                    await userData.save();
-                }
+                // if (userData && courseData) {
+                //     courseData.enrolledStudents.push(userData._id);
+                //     userData.enrolledCourses.push(courseData._id);
+                //     await courseData.save();
+                //     await userData.save();
+                // }
+                await Promise.all([
+                    // Update Course: Add User to enrolledStudents
+                    Course.findByIdAndUpdate(purchaseData.courseId, {
+                        $addToSet: { enrolledStudents: purchaseData.userId }
+                    }),
+                    // Update User: Add Course to enrolledCourses
+                    User.findByIdAndUpdate(purchaseData.userId, {
+                        $addToSet: { enrolledCourses: purchaseData.courseId }
+                    }),
+                    // Update Purchase Status
+                    Purchase.findByIdAndUpdate(purchaseId, { status: 'completed' })
+                ]);
 
                 // 4. Send a 200 OK back to Stripe
                 res.status(200).json({ received: true });
