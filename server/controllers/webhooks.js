@@ -93,43 +93,42 @@ export const stripeWebhooks = async (request, response) => {
                     payment_intent: paymentIntent.id,
                 });
 
-                // 2. Safety check to ensure session and metadata exist
-                if (!sessions.data.length || !sessions.data[0].metadata) {
-                    console.error("No metadata found for this payment intent.");
-                    return res.status(400).send("Metadata missing");
+                // 2. Check if data exists before accessing it
+                if (!sessions.data || sessions.data.length === 0) {
+                    console.error("No session found for this payment intent.");
+                    return res.status(400).json({ error: "Session not found" });
                 }
 
                 const { purchaseId } = sessions.data[0].metadata;
 
-                // 3. Find the purchase record
+                // 3. Update your Database
                 const purchaseData = await Purchase.findById(purchaseId);
                 if (!purchaseData) {
-                    console.error("Purchase not found in database.");
-                    return res.status(404).send("Purchase not found");
+                    return res.status(404).json({ error: "Purchase record not found" });
                 }
 
-                // 4. Update the DB records
+                // Perform updates
+                purchaseData.status = 'completed';
+                await purchaseData.save();
+
+                // Update User and Course (ensure IDs are used)
                 const userData = await User.findById(purchaseData.userId);
                 const courseData = await Course.findById(purchaseData.courseId);
 
                 if (userData && courseData) {
-                    // Push IDs specifically to avoid Mongoose validation errors
                     courseData.enrolledStudents.push(userData._id);
                     userData.enrolledCourses.push(courseData._id);
-
                     await courseData.save();
                     await userData.save();
-
-                    purchaseData.status = 'completed';
-                    await purchaseData.save();
-
-                    console.log(`Successfully processed purchase: ${purchaseId}`);
                 }
 
+                // 4. Send a 200 OK back to Stripe
+                res.status(200).json({ received: true });
+
             } catch (err) {
-                console.error("Webhook Logic Error:", err.message);
-                // Sending 500 here tells Stripe to try again later
-                return res.status(500).send("Internal Server Error");
+                console.error("Webhook Error:", err.message);
+                // Sending 500 here tells Stripe the server had an issue and to retry later
+                res.status(500).send("Internal Server Error");
             }
             break;
         }
