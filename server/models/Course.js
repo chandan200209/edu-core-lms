@@ -29,7 +29,12 @@ const courseSchema = new mongoose.Schema({
         }
     ],
     educator: { type: String, ref: 'User', required: true },
+<<<<<<< HEAD
     enrolledStudents: [{ type: String, ref: 'User' }]
+=======
+    enrolledStudents: [{ type: String, ref: 'User', default: [] }], // ✅ array fixed
+
+>>>>>>> acb5adf1ebd9c0c812d15f97f7227b88464a2177
 }, { timestamps: true, minimize: false })
 const Course = mongoose.model('Course', courseSchema);
 export default Course;
