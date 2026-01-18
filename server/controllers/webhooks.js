@@ -6,6 +6,7 @@ import Stripe from "stripe";
 import { Purchase } from "../models/Purchase.js";
 import Course from "../models/Course.js";
 
+
 //API controller function to manage User with Clerk database
 export const clerkWebhooks = async (req, res) => {
     try {
@@ -54,15 +55,13 @@ export const clerkWebhooks = async (req, res) => {
     }
 }
 
-const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const stripeWebhooks = async (req, res) => {
     try {
-        // 1️⃣ Detect frontend request to create checkout session
+        // Detect frontend request to create session (optional, keep only if needed)
         const { userId, courseId } = req.body;
-
         if (userId && courseId) {
-            // --- Create Stripe Checkout Session ---
             const course = await Course.findById(courseId);
             if (!course) return res.status(404).json({ error: "Course not found" });
 
@@ -74,9 +73,9 @@ export const stripeWebhooks = async (req, res) => {
                 status: "pending"
             });
 
-            const YOUR_DOMAIN = process.env.FRONTEND_DOMAIN || "http://localhost:5173";
+            const YOUR_DOMAIN = process.env.FRONTEND_DOMAIN || "http://localhost:3000";
 
-            const session = await stripeInstance.checkout.sessions.create({
+            const session = await stripe.checkout.sessions.create({
                 payment_method_types: ["card"],
                 line_items: [
                     {
@@ -92,14 +91,18 @@ export const stripeWebhooks = async (req, res) => {
                 success_url: `${YOUR_DOMAIN}/success?session_id={CHECKOUT_SESSION_ID}`,
                 cancel_url: `${YOUR_DOMAIN}/cancel`,
                 metadata: {
-                    purchaseId: purchase._id.toString() // ✅ Needed for webhook
+                    purchaseId: purchase._id.toString()
                 }
             });
+
+            // Save checkoutSessionId for fallback
+            purchase.checkoutSessionId = session.id;
+            await purchase.save();
 
             return res.json({ url: session.url });
         }
 
-        // 2️⃣ Otherwise, handle Stripe webhook
+        // Handle Stripe webhook
         const sig = req.headers["stripe-signature"];
         let event;
         try {
@@ -113,36 +116,45 @@ export const stripeWebhooks = async (req, res) => {
             case "payment_intent.succeeded": {
                 const paymentIntent = event.data.object;
 
-                // Get checkout session to access purchaseId
-                const sessions = await stripeInstance.checkout.sessions.list({
-                    payment_intent: paymentIntent.id
-                });
+                // Find purchase either via metadata or fallback using checkoutSessionId
+                let purchaseData;
 
-                if (!sessions.data.length || !sessions.data[0]?.metadata?.purchaseId) {
-                    console.error("❌ purchaseId missing in session metadata");
-                    return res.status(400).json({ error: "purchaseId missing" });
+                try {
+                    const sessions = await stripe.checkout.sessions.list({ payment_intent: paymentIntent.id });
+                    const purchaseId = sessions.data[0]?.metadata?.purchaseId;
+
+                    if (purchaseId) {
+                        purchaseData = await Purchase.findById(purchaseId);
+                    } else {
+                        purchaseData = await Purchase.findOne({ checkoutSessionId: paymentIntent.id });
+                    }
+                } catch (err) {
+                    console.error("❌ Error fetching Stripe session:", err.message);
+                    return res.status(500).send("Internal Server Error");
                 }
 
-                const purchaseId = sessions.data[0].metadata.purchaseId;
-                const purchaseData = await Purchase.findById(purchaseId);
-                if (!purchaseData) return res.status(404).json({ error: "Purchase not found" });
+                if (!purchaseData) {
+                    console.error("❌ Purchase not found for paymentIntent:", paymentIntent.id);
+                    return res.status(404).json({ error: "Purchase not found" });
+                }
 
-                // Update Course and User arrays
+                // Update course and user arrays
                 await Course.findByIdAndUpdate(
                     purchaseData.courseId,
                     { $addToSet: { enrolledStudents: purchaseData.userId } }
                 );
+                console.log(`✅ Added user ${purchaseData.userId} to course ${purchaseData.courseId}`);
 
                 await User.findByIdAndUpdate(
                     purchaseData.userId,
                     { $addToSet: { enrolledCourses: purchaseData.courseId } }
                 );
+                console.log(`✅ Added course ${purchaseData.courseId} to user ${purchaseData.userId}`);
 
-                // Mark purchase completed
+                // Update purchase status
                 purchaseData.status = "completed";
                 await purchaseData.save();
-
-                console.log(`✅ User ${purchaseData.userId} enrolled in course ${purchaseData.courseId}. Purchase completed.`);
+                console.log(`✅ Purchase ${purchaseData._id} marked as completed`);
 
                 return res.status(200).json({ received: true });
             }
@@ -150,14 +162,16 @@ export const stripeWebhooks = async (req, res) => {
             case "payment_intent.payment_failed": {
                 const paymentIntent = event.data.object;
 
-                const sessions = await stripeInstance.checkout.sessions.list({
-                    payment_intent: paymentIntent.id
-                });
+                try {
+                    const sessions = await stripe.checkout.sessions.list({ payment_intent: paymentIntent.id });
+                    const purchaseId = sessions.data[0]?.metadata?.purchaseId;
 
-                if (sessions.data[0]?.metadata?.purchaseId) {
-                    const purchaseId = sessions.data[0].metadata.purchaseId;
-                    await Purchase.findByIdAndUpdate(purchaseId, { status: "failed" });
-                    console.log(`⚠️ Payment failed. Purchase ${purchaseId} marked as failed.`);
+                    if (purchaseId) {
+                        await Purchase.findByIdAndUpdate(purchaseId, { status: "failed" });
+                        console.log(`⚠️ Payment failed. Purchase ${purchaseId} marked as failed.`);
+                    }
+                } catch (err) {
+                    console.error("❌ Failed payment webhook error:", err.message);
                 }
 
                 return res.status(200).json({ received: true });
@@ -172,6 +186,3 @@ export const stripeWebhooks = async (req, res) => {
         return res.status(500).send("Internal Server Error");
     }
 };
-
-
-
