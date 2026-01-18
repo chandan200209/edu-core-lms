@@ -53,27 +53,69 @@ export const clerkWebhooks = async (req, res) => {
         res.json({ success: false, message: error.message });
     }
 }
+
 const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const stripeWebhooks = async (req, res) => {
-    const sig = req.headers['stripe-signature'];
-    let event;
-
     try {
-        event = Stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-    } catch (err) {
-        console.error("⚠️ Stripe webhook verification failed:", err.message);
-        return res.status(400).send(`Webhook Error: ${err.message}`);
-    }
+        // 1️⃣ Detect frontend request to create checkout session
+        const { userId, courseId } = req.body;
 
-    switch (event.type) {
+        if (userId && courseId) {
+            // --- Create Stripe Checkout Session ---
+            const course = await Course.findById(courseId);
+            if (!course) return res.status(404).json({ error: "Course not found" });
 
-        case 'payment_intent.succeeded':
-            try {
+            // Create purchase record
+            const purchase = await Purchase.create({
+                courseId: course._id,
+                userId,
+                amount: course.coursePrice,
+                status: "pending"
+            });
+
+            const YOUR_DOMAIN = process.env.FRONTEND_DOMAIN || "http://localhost:3000";
+
+            const session = await stripeInstance.checkout.sessions.create({
+                payment_method_types: ["card"],
+                line_items: [
+                    {
+                        price_data: {
+                            currency: "usd",
+                            product_data: { name: course.courseTitle },
+                            unit_amount: course.coursePrice * 100
+                        },
+                        quantity: 1
+                    }
+                ],
+                mode: "payment",
+                success_url: `${YOUR_DOMAIN}/success?session_id={CHECKOUT_SESSION_ID}`,
+                cancel_url: `${YOUR_DOMAIN}/cancel`,
+                metadata: {
+                    purchaseId: purchase._id.toString() // ✅ Needed for webhook
+                }
+            });
+
+            return res.json({ url: session.url });
+        }
+
+        // 2️⃣ Otherwise, handle Stripe webhook
+        const sig = req.headers["stripe-signature"];
+        let event;
+        try {
+            event = Stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+        } catch (err) {
+            console.error("⚠️ Stripe webhook verification failed:", err.message);
+            return res.status(400).send(`Webhook Error: ${err.message}`);
+        }
+
+        switch (event.type) {
+            case "payment_intent.succeeded": {
                 const paymentIntent = event.data.object;
 
+                // Get checkout session to access purchaseId
                 const sessions = await stripeInstance.checkout.sessions.list({
-                    payment_intent: paymentIntent.id,
+                    payment_intent: paymentIntent.id
                 });
 
                 if (!sessions.data.length || !sessions.data[0]?.metadata?.purchaseId) {
@@ -85,7 +127,7 @@ export const stripeWebhooks = async (req, res) => {
                 const purchaseData = await Purchase.findById(purchaseId);
                 if (!purchaseData) return res.status(404).json({ error: "Purchase not found" });
 
-                // Update arrays and status
+                // Update Course and User arrays
                 await Course.findByIdAndUpdate(
                     purchaseData.courseId,
                     { $addToSet: { enrolledStudents: purchaseData.userId } }
@@ -96,38 +138,40 @@ export const stripeWebhooks = async (req, res) => {
                     { $addToSet: { enrolledCourses: purchaseData.courseId } }
                 );
 
-                purchaseData.status = 'completed';
+                // Mark purchase completed
+                purchaseData.status = "completed";
                 await purchaseData.save();
 
-                console.log(`✅ Payment succeeded. User ${purchaseData.userId} enrolled in course ${purchaseData.courseId}.`);
+                console.log(`✅ User ${purchaseData.userId} enrolled in course ${purchaseData.courseId}. Purchase completed.`);
 
                 return res.status(200).json({ received: true });
-            } catch (err) {
-                console.error("❌ Webhook processing error:", err.message);
-                return res.status(500).send("Internal Server Error");
             }
 
-        case 'payment_intent.payment_failed':
-            try {
+            case "payment_intent.payment_failed": {
                 const paymentIntent = event.data.object;
+
                 const sessions = await stripeInstance.checkout.sessions.list({
-                    payment_intent: paymentIntent.id,
+                    payment_intent: paymentIntent.id
                 });
 
                 if (sessions.data[0]?.metadata?.purchaseId) {
                     const purchaseId = sessions.data[0].metadata.purchaseId;
-                    await Purchase.findByIdAndUpdate(purchaseId, { status: 'failed' });
+                    await Purchase.findByIdAndUpdate(purchaseId, { status: "failed" });
                     console.log(`⚠️ Payment failed. Purchase ${purchaseId} marked as failed.`);
                 }
 
                 return res.status(200).json({ received: true });
-            } catch (err) {
-                console.error("❌ Failed payment webhook error:", err.message);
-                return res.status(500).send("Internal Server Error");
             }
 
-        default:
-            console.log(`ℹ️ Unhandled event type: ${event.type}`);
-            return res.status(200).json({ received: true });
+            default:
+                console.log(`ℹ️ Unhandled Stripe event type: ${event.type}`);
+                return res.status(200).json({ received: true });
+        }
+    } catch (err) {
+        console.error("❌ stripeWebhooks error:", err.message);
+        return res.status(500).send("Internal Server Error");
     }
 };
+
+
+
