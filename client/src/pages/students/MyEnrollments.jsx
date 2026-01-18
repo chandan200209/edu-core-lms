@@ -1,12 +1,12 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useContext } from "react";
 import { AppContext } from "../../context/AppContext";
 import { Line } from "rc-progress";
 import Footer from "../../components/students/Footer";
+import { toast } from "react-toastify";
 
 const MyEnrollments = () => {
-  const { enrolledCourses, calculateCourseDuration, navigate } =
-    useContext(AppContext);
+  const { enrolledCourses, calculateCourseDuration, navigate, getToken, userData, fetchUserEnrolledCourses, backendUrl, calculateNoOfLectures } = useContext(AppContext);
   const [progressArray, setProgressArray] = useState([
     { lectureCompleted: 2, totalLectures: 4 },
     { lectureCompleted: 1, totalLectures: 4 },
@@ -23,9 +23,39 @@ const MyEnrollments = () => {
     { lectureCompleted: 0, totalLectures: 2 },
     { lectureCompleted: 5, totalLectures: 5 },
   ]);
+  // const getCourseProgress = async () => {
+  //   try {
+  //     const token = await getToken();
+  //     const tempProgressArray = await Promise.all(
+  //       enrolledCourses.map(async (course) => {
+  //         const { data } = await axios.post(`${backendUrl}/api/user/get-course-progress`, { courseId: course._id }, {
+  //           headers: {
+  //             Authorization: `Bearer ${token}`
+  //           }
+  //         });
+  //         let totalLectures = calculateNoOfLectures(course);
+  //         const lectureCompleted = data.progressData ? data.progressData.lectureCompleted.length : 0;
+  //         return { totalLectures, lectureCompleted };
+  //       })
+  //     )
+  //     setProgressArray(tempProgressArray);
+  //   } catch (error) {
+  //     toast.error(error.message);
+  //   }
+  // }
+  // useEffect(() => {
+  //   if (userData) {
+  //     fetchUserEnrolledCourses();
+  //   }
+  // }, [userData]);
+  // useEffect(() => {
+  //   if (enrolledCourses.length > 0) {
+  //     getCourseProgress();
+  //   }
+  // }, [enrolledCourses]);
   return (
     <>
-      <div className="md:px-36 px-8 pt-10">
+      <div className="md:px-36 px-8 pt-10 min-h-screen">
         <h1 className="text-2xl font-semibold m-4">My Enrollments</h1>
         <table className="md:table-auto w-full overflow-hidden table-fixed border-mt-10">
           <thead className="text-gray-900 text-sm border-b border-gray-500/20 text-left max-sm:hidden">
@@ -52,8 +82,8 @@ const MyEnrollments = () => {
                       percent={
                         progressArray[index]
                           ? (progressArray[index].lectureCompleted /
-                              progressArray[index].totalLectures) *
-                            100
+                            progressArray[index].totalLectures) *
+                          100
                           : 0
                       }
                       strokeWidth={2}
@@ -75,7 +105,7 @@ const MyEnrollments = () => {
                     className="px-3 cursor-pointer md:px-5 py-1.5 md:py-2 bg-blue-600 text-white max-sm:text-xs"
                   >
                     {progressArray[index] &&
-                    progressArray[index].lectureCompleted /
+                      progressArray[index].lectureCompleted /
                       progressArray[index].totalLectures ===
                       1
                       ? "Completed"

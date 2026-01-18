@@ -3,17 +3,39 @@ import { assets } from "../../assets/assets";
 import { Link } from "react-router-dom";
 import { useClerk, UserButton, useUser } from "@clerk/clerk-react";
 import { AppContext } from "../../context/AppContext";
+import axios from "axios";
+import { toast } from "react-toastify";
 
 const Navbar = () => {
   const { openSignIn } = useClerk();
-  const { navigate, isEducator } = useContext(AppContext);
+  const { navigate, isEducator, getToken, setIsEducator, backendUrl } = useContext(AppContext);
   const { user } = useUser();
   const isCourseListPage = location.pathname.includes("course-list");
+  const becomeEducator = async () => {
+    try {
+      if (isEducator) {
+        navigate('/educator')
+        return;
+      }
+      const token = await getToken();
+      const { data } = await axios.get(backendUrl + '/api/educator/update-role', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+      if (data.success) {
+        toast.success(data.message);
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      toast.error(error.message);
+    }
+  }
   return (
     <div
-      className={`flex items-center justify-between px-4 sm:px-10 md:px-14 lg:px-36 border-b py-4 border-gray-400 ${
-        isCourseListPage ? "bg-white" : "bg-cyan-100/70"
-      }`}
+      className={`flex items-center justify-between px-4 sm:px-10 md:px-14 lg:px-36 border-b py-4 border-gray-400 ${isCourseListPage ? "bg-white" : "bg-cyan-100/70"
+        }`}
     >
       <img
         src={assets.logo}
@@ -26,7 +48,7 @@ const Navbar = () => {
           {user && (
             <>
               <button
-                onClick={() => navigate("/educator")}
+                onClick={becomeEducator}
                 className="cursor-pointer"
               >
                 {isEducator ? "Educator Dashboard" : "Become Educator"}
@@ -49,11 +71,11 @@ const Navbar = () => {
         )}
       </div>
       <div className="md:hidden flex items-center text-[10px] gap-2 sm:gap-4 sm:text-sm md:text-md text-gray-500">
-        <div className="">
+        <div >
           {user && (
             <>
               <button
-                onClick={() => navigate("/educator")}
+                onClick={becomeEducator}
                 className="cursor-pointer"
               >
                 {isEducator ? "Educator Dashboard" : "Become Educator"}

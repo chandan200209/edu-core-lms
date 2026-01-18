@@ -50,7 +50,7 @@ const Footer = () => {
         </div>
       </div>
       <p className="text-center py-4 text-white/60 text-xs md:text-sm">
-        Copyright 2024 © Edemy. All Right Reserved.
+        Copyright 2024 © EduCore. All Right Reserved.
       </p>
     </footer>
   );

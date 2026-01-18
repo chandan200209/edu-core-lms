@@ -6,29 +6,114 @@ import { assets } from "../../assets/assets";
 import YouTube from "react-youtube";
 import Footer from "../../components/students/Footer";
 import Rating from "../../components/students/Rating";
+import { toast } from "react-toastify";
+import Loading from "../../components/students/Loading";
 
 const Player = () => {
-  const { enrolledCourses, calculateChapterTime } = useContext(AppContext);
+  const { enrolledCourses, calculateChapterTime, backendUrl, userData, fetchUserEnrolledCourses, getToken } = useContext(AppContext);
   const { courseId } = useParams();
   const [courseData, setCourseData] = useState(null);
   const [playerData, setPlayerData] = useState(null);
+  const [progressData, setProgressData] = useState(null);
+  const [initialRating, setInitialRating] = useState(0);
   const [openSections, setOpenSections] = useState({});
+
   const getCourseData = () => {
     enrolledCourses.map((course) => {
       if (course._id === courseId) {
         setCourseData(course);
+        // course.courseRatings.map((item) => {
+        //   if (item.userId === userData._id) {
+        //     setInitialRating(item.Rating);
+        //   }
+        // })
       }
     });
   };
+
+  // useEffect(() => {
+  //   if (enrolledCourses.length > 0) {
+  //     getCourseData();
+  //   }
+  // }, [enrolledCourses]);
+
+  // const markLecturesAsCompleted = async () => {
+  //   try {
+  //     const token = await getToken();
+  //     const { data } = await axios.post(backendUrl + '/api/user/update-course-progress', { courseId, lectureId }, {
+  //       headers: {
+  //         Authorization: `Bearer ${token}`
+  //       }
+  //     })
+  //     if (data.success) {
+  //       toast.success(data.message);
+  //       getCourseProgress();
+  //     }
+  //     else {
+  //       toast.error(data.message);
+  //     }
+  //   }
+  //   catch (error) {
+  //     toast.error(error.message);
+  //   }
+  // };
+
+  // const getCourseProgress = async () => {
+  //   try {
+  //     const token = await getToken();
+
+  //     const { data } = await axios.post(`${backendUrl}/api/user/get-course-progress`, { courseId }, {
+  //       headers: {
+  //         Authorization: `Bearer ${token}`
+  //       }
+  //     })
+  //     if (data.success) {
+  //       setProgressData(data.progressData);
+  //     }
+  //     else {
+  //       toast.error(data.message);
+  //     }
+  //   }
+  //   catch (error) {
+  //     toast.error(error.message);
+  //   }
+  // }
+
+  // const handleRate = async (rating) => {
+  //   try {
+  //     const token = await getToken();
+
+  //     const { data } = await axios.post(`${backendUrl}/api/user/add-rating`, { courseId, rating }, {
+  //       headers: {
+  //         Authorization: `Bearer ${token}`
+  //       }
+  //     })
+  //     if (data.success) {
+  //       toast.success(data.message);
+  //       fetchUserEnrolledCourses();
+  //     }
+  //     else {
+  //       toast.error(data.message);
+  //     }
+  //   }
+  //   catch (error) {
+  //     toast.error(error.message);
+  //   }
+  // }
+
+  // useEffect(() => {
+  //   getCourseProgress();
+  // }, []);
+
   useEffect(() => {
     getCourseData();
   }, [enrolledCourses]);
   const toggleSection = (index) => {
     setOpenSections((prev) => ({ ...prev, [index]: !prev[index] }));
   };
-  return (
+  return courseData ? (
     <>
-      <div className="p-4 md:p-10 flex flex-col-reverse md:grid md:grid-cols-2 gap-10 md:px-36">
+      <div className="p-4 md:p-10 flex flex-col-reverse min-h-screen md:grid md:grid-cols-2 gap-10 md:px-36">
         {/* left column */}
         <div className="text-gray-800">
           <h2 className="font-semibold text-xl">Course Structure</h2>
@@ -109,7 +194,8 @@ const Player = () => {
           </div>
           <div className="flex py-2 mt-10 gap-2  items-center">
             <h2 className="font-bold text-xl">Rate this course : </h2>
-            <Rating initialRating={0} />
+            <Rating initialRating={initialRating} />
+            {/* <Rating initialRating={initialRating} onRate = {handleRate} /> */}
           </div>
         </div>
         {/* right column */}
@@ -128,6 +214,9 @@ const Player = () => {
                 <button className="text-blue-600">
                   {false ? "Completed" : "Mark Complete"}
                 </button>
+                {/* <button onClick={() => markLectureAsCompleted(playerData.lectureId)} className="text-blue-600">
+                  {progressData && progressData.lectureCompleted.includes(playerData.lectureId) ? "Completed" : "Mark Complete"}
+                </button> */}
               </div>
             </div>
           ) : (
@@ -140,7 +229,7 @@ const Player = () => {
       </div>
       <Footer />
     </>
-  );
+  ) : <Loading />
 };
 
 export default Player;

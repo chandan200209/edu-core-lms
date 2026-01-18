@@ -16,7 +16,7 @@ const CourseCard = ({ course }) => {
       <img className="" src={course.courseThumbnail} alt="" />
       <div className="p-3 text-left">
         <h3 className="font-semibold text-base">{course.courseTitle}</h3>
-        <p className="text-sm text-gray-500 ">GreakStack</p>
+        <p className="text-sm text-gray-500 ">{course.educator.name ? course.educator.name : 'GreatStack'}</p>
         <div className="flex items-center space-x-2">
           <p>{calculateRating(course)}</p>
           <div className="flex justify-start">

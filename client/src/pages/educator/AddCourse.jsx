@@ -1,9 +1,13 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import uniqid from "uniqid";
 import Quill from "quill"; // for rich text in the course description
 import { assets } from "../../assets/assets";
+import { AppContext } from "../../context/AppContext";
+import { toast } from "react-toastify";
+import axios from "axios";
 
 const AddCourse = () => {
+  const { backendUrl, getToken } = useContext(AppContext);
   const quillRef = useRef(null);
   const editorRef = useRef(null);
 
@@ -88,6 +92,44 @@ const AddCourse = () => {
       isPreviewFree: false,
     });
   };
+  // const handleSubmit = async (e) => {
+  //   try {
+  //     e.preventDefault();
+  //     if (!image) {
+  //       toast.error('Thumbnail not selected');
+  //     }
+  //     const courseData = {
+  //       courseTitle,
+  //       courseDescription: quillRef.current.root.innerHTML,
+  //       coursePrice: Number(coursePrice),
+  //       discount: Number(discount),
+  //       courseContent: chapters
+  //     }
+  //     const formData = new formData();
+  //     formData.append('courseData', JSON.stringify(courseData));
+  //     formData.append('image', image);
+  //     const token = await getToken();
+  //     const { data } = await axios.post(backendUrl + '/api/educator/add-course', formData, {
+  //       headers: {
+  //         Authorization: `Bearer ${token}`
+  //       }
+  //     })
+  //     if (data.success) {
+  //       toast.success(data.message);
+  //       setCourseTitle('')
+  //       setDiscount(0)
+  //       setCoursePrice(0)
+  //       setImage(null)
+  //       setChapters([])
+  //       quillRef.current.root.innerHTML = ''
+  //     }
+  //     else {
+  //       toast.error(data.message);
+  //     }
+  //   } catch (error) {
+
+  //   }
+  // };
   const handleSubmit = async (e) => {
     e.preventDefault();
   };
@@ -179,9 +221,8 @@ const AddCourse = () => {
                     src={assets.dropdown_icon}
                     width={14}
                     onClick={() => handleChapter("toggle", chapter.chapterId)}
-                    className={`mr-2 cursor-pointer transition-all ${
-                      chapter.collapsed && "-rotate-90"
-                    }`}
+                    className={`mr-2 cursor-pointer transition-all ${chapter.collapsed && "-rotate-90"
+                      }`}
                   />
                   <span className="font-semibold">
                     {chapterIndex + 1} {chapter.chapterTitle}
