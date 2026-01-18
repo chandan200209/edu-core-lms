@@ -74,7 +74,7 @@ export const stripeWebhooks = async (req, res) => {
                 status: "pending"
             });
 
-            const YOUR_DOMAIN = process.env.FRONTEND_DOMAIN || "http://localhost:3000";
+            const YOUR_DOMAIN = process.env.FRONTEND_DOMAIN || "http://localhost:5173";
 
             const session = await stripeInstance.checkout.sessions.create({
                 payment_method_types: ["card"],
