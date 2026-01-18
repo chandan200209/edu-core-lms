@@ -1,3 +1,5 @@
+import dotenv from 'dotenv';
+dotenv.config()
 import { Webhook } from "svix";
 import User from "../models/User.js";
 import Stripe from "stripe";
